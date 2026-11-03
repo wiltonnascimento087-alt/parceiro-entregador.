@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Parceiro Entregador</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:18px;background:#111;color:white;font-family:Arial}
+header,.card{padding:20px;border-radius:14px;margin-bottom:16px}
+header{background:#ffcc00;color:#111}
+.card{background:#222}
+h2{color:#ffcc00}
+input,select,button{width:100%;padding:13px;margin:7px 0;border:0;border-radius:8px;font-size:16px}
+button{background:#ffcc00;color:#111;font-weight:bold}
+button:disabled{opacity:.5}
+.online{background:#138a36;color:white}
+.offline{background:#b3261e;color:white}
+.status{font-size:22px;font-weight:bold;text-align:center;padding:12px}
+.entrega{background:#333;padding:12px;border-radius:8px;margin:8px 0}
+.hidden{display:none}
+small{color:#ccc}
+</style>
+</head>
+<body>
+
+<header>
+<h1>🏍️ Parceiro Entregador</h1>
+<p>Seu painel de entregas</p>
+</header>
+
+<section class="card" id="login">
+<h2>Entrar na sua conta</h2>
+<input id="nome" placeholder="Seu nome">
+<input id="email" type="email" placeholder="Seu e-mail">
+<input id="senha" type="password" placeholder="Sua senha">
+<button onclick="cadastrar()">Criar minha conta</button>
+<button onclick="entrar()">Entrar</button>
+<p id="mensagem"></p>
+</section>
+
+<section id="painel" class="hidden">
+<div class="card">
+<h2>Meu status</h2>
+<p id="nomeUsuario"></p>
+<div class="status" id="status">OFFLINE</div>
+<button class="online" onclick="mudarStatus(true)">FICAR ONLINE</button>
+<button class="offline" onclick="mudarStatus(false)">FICAR OFFLINE</button>
+<small>Seu status fica salvo na sua conta.</small>
+<button onclick="sair()">Sair da conta</button>
+</div>
+
+<div class="card">
+<h2>Nova entrega</h2>
+<input id="cliente" placeholder="Nome do destinatário">
+<input id="telefone" placeholder="Telefone">
+<input id="origem" placeholder="Local de retirada">
+<input id="destino" placeholder="Endereço de destino">
+<input id="referencia" placeholder="Ponto de referência">
+<select id="veiculo">
+<option value="Moto">Moto</option>
+<option value="Bicicleta">Bicicleta</option>
+</select>
+<input id="distancia" type="number" placeholder="Distância em km">
+<input id="valor" type="number" placeholder="Valor da entrega em R$">
+<button onclick="adicionarEntrega()">Adicionar entrega</button>
+</div>
+
+<div class="card">
+<h2>Minhas entregas</h2>
+<div id="lista"></div>
+</div>
+</section>
+
+<script type="module">
+import {initializeApp} from
+"https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+
+import {
+ getAuth,createUserWithEmailAndPassword,
+ signInWithEmailAndPassword,onAuthStateChanged,signOut
+} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+
+import {
+ getFirestore,doc,setDoc,getDoc,updateDoc,onSnapshot,serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+
+const firebaseConfig = {
+ apiKey: "AIzaSyAJhAyQeOWdcWKJqPwI2aEate6QYCgIqW0",
+ authDomain: "parceiro-entregador-bbd2.firebaseapp.com",
+ projectId: "parceiro-entregador-bbd2",
+ appId: "1:1042700499445:web:6946501fec49f892a688bc"
+};
+
+const app=initializeApp(firebaseConfig);
+const auth=getAuth(app);
+const db=getFirestore(app);
+
+let usuarioAtual=null;
+let pararEscuta=null;
+let entregas=[];
+
+window.cadastrar=async()=>{
+ const nome=document.getElementById("nome").value.trim();
+ const email=document.getElementById("email").value.trim();
+ const senha=document.getElementById("senha").value;
+ const msg=document.getElementById("mensagem");
+
+ if(!nome||!email||!senha){msg.innerText="Preencha nome, e-mail e senha.";return;}
+
+ try{
+  const cred=await createUserWithEmailAndPassword(auth,email,senha);
+  await setDoc(doc(db,"entregadores",cred.user.uid),{
+   nome:nome,email:email,online:false,atualizadoEm:serverTimestamp()
+  });
+  msg.innerText="Conta criada!";
+ }catch(e){msg.innerText="Erro: "+e.message;}
+};
+
+window.entrar=async()=>{
+ const email=document.getElementById("email").value.trim();
+ const senha=document.getElementById("senha").value;
+ try{
+  await signInWithEmailAndPassword(auth,email,senha);
+ }catch(e){
+  document.getElementById("mensagem").innerText="Erro: "+e.message;
+ }
+};
+
+onAuthStateChanged(auth,async(user)=>{
+ const login=document.getElementById("login");
+ const painel=document.getElementById("painel");
+
+ if(pararEscuta){pararEscuta();pararEscuta=null;}
+
+ if(user){
+  usuarioAtual=user;
+  login.classList.add("hidden");
+  painel.classList.remove("hidden");
+
+  const ref=doc(db,"entregadores",user.uid);
+  const snap=await getDoc(ref);
+
+  if(!snap.exists()){
+   await setDoc(ref,{
+    nome:user.email,email:user.email,online:false,
+    atualizadoEm:serverTimestamp()
+   });
+  }
+
+  pararEscuta=onSnapshot(ref,(docSnap)=>{
+   if(docSnap.exists()){
+    const dados=docSnap.data();
+    document.getElementById("nomeUsuario").innerText=
+      "Olá, "+(dados.nome||user.email);
+    const online=dados.online===true;
+    document.getElementById("status").innerText=
+      online?"🟢 ONLINE":"🔴 OFFLINE";
+   }
+  },(erro)=>{
+   alert("Erro ao carregar status: "+erro.message);
+  });
+
+ }else{
+  usuarioAtual=null;
+  login.classList.remove("hidden");
+  painel.classList.add("hidden");
+ }
+});
+
+window.mudarStatus=async(online)=>{
+ if(!usuarioAtual)return;
+ try{
+  await updateDoc(doc(db,"entregadores",usuarioAtual.uid),{
+   online:online,
+   atualizadoEm:serverTimestamp()
+  });
+ }catch(e){alert("Não foi possível salvar o status: "+e.message);}
+};
+
+window.sair=async()=>{
+ if(usuarioAtual){
+  try{await window.mudarStatus(false);}catch(e){}
+ }
+ await signOut(auth);
+};
+
+window.adicionarEntrega=()=>{
+ const cliente=document.getElementById("cliente").value;
+ const telefone=document.getElementById("telefone").value;
+ const origem=document.getElementById("origem").value;
+ const destino=document.getElementById("destino").value;
+ const referencia=document.getElementById("referencia").value;
+ const veiculo=document.getElementById("veiculo").value;
+ const distancia=document.getElementById("distancia").value;
+ const valor=document.getElementById("valor").value;
+
+ if(!cliente||!destino){alert("Preencha o destinatário e o destino.");return;}
+
+ entregas.push({cliente,telefone,origem,destino,referencia,veiculo,distancia,valor});
+ mostrarEntregas();
+
+ ["cliente","telefone","origem","destino","referencia","distancia","valor"]
+ .forEach(id=>document.getElementById(id).value="");
+};
+
+function mostrarEntregas(){
+ document.getElementById("lista").innerHTML=entregas.map((e,i)=>`
+ <div class="entrega">
+ <b>Entrega ${i+1} — ${e.cliente}</b><br>
+ Telefone: ${e.telefone}<br>
+ Retirada: ${e.origem}<br>
+ Destino: ${e.destino}<br>
+ Referência: ${e.referencia}<br>
+ Veículo: ${e.veiculo}<br>
+ Distância: ${e.distancia} km<br>
+ Valor: R$ ${e.valor}
+ </div>`).join("");
+}
+</script>
+</body>
+</html>
