@@ -13,7 +13,6 @@ header{background:#ffcc00;color:#111}
 h2{color:#ffcc00}
 input,select,button{width:100%;padding:13px;margin:7px 0;border:0;border-radius:8px;font-size:16px}
 button{background:#ffcc00;color:#111;font-weight:bold}
-button:disabled{opacity:.5}
 .online{background:#138a36;color:white}
 .offline{background:#b3261e;color:white}
 .status{font-size:22px;font-weight:bold;text-align:center;padding:12px}
@@ -82,19 +81,20 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 
 import {
- getFirestore,doc,setDoc,getDoc,updateDoc,onSnapshot,serverTimestamp
-} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+ getDatabase,ref,set,get,update,onValue
+} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js";
 
 const firebaseConfig = {
  apiKey: "AIzaSyAJhAyQeOWdcWKJqPwI2aEate6QYCgIqW0",
  authDomain: "parceiro-entregador-bbd2.firebaseapp.com",
  projectId: "parceiro-entregador-bbd2",
+ databaseURL: "https://parceiro-entregador-bbd2-default-rtdb.firebaseio.com",
  appId: "1:1042700499445:web:6946501fec49f892a688bc"
 };
 
 const app=initializeApp(firebaseConfig);
 const auth=getAuth(app);
-const db=getFirestore(app);
+const db=getDatabase(app);
 
 let usuarioAtual=null;
 let pararEscuta=null;
@@ -106,20 +106,31 @@ window.cadastrar=async()=>{
  const senha=document.getElementById("senha").value;
  const msg=document.getElementById("mensagem");
 
- if(!nome||!email||!senha){msg.innerText="Preencha nome, e-mail e senha.";return;}
+ if(!nome||!email||!senha){
+  msg.innerText="Preencha nome, e-mail e senha.";
+  return;
+ }
 
  try{
   const cred=await createUserWithEmailAndPassword(auth,email,senha);
-  await setDoc(doc(db,"entregadores",cred.user.uid),{
-   nome:nome,email:email,online:false,atualizadoEm:serverTimestamp()
+
+  await set(ref(db,"entregadores/"+cred.user.uid),{
+   nome:nome,
+   email:email,
+   online:false,
+   atualizadoEm:Date.now()
   });
+
   msg.innerText="Conta criada!";
- }catch(e){msg.innerText="Erro: "+e.message;}
+ }catch(e){
+  msg.innerText="Erro: "+e.message;
+ }
 };
 
 window.entrar=async()=>{
  const email=document.getElementById("email").value.trim();
  const senha=document.getElementById("senha").value;
+
  try{
   await signInWithEmailAndPassword(auth,email,senha);
  }catch(e){
@@ -131,35 +142,50 @@ onAuthStateChanged(auth,async(user)=>{
  const login=document.getElementById("login");
  const painel=document.getElementById("painel");
 
- if(pararEscuta){pararEscuta();pararEscuta=null;}
+ if(pararEscuta){
+  pararEscuta();
+  pararEscuta=null;
+ }
 
  if(user){
   usuarioAtual=user;
   login.classList.add("hidden");
   painel.classList.remove("hidden");
 
-  const ref=doc(db,"entregadores",user.uid);
-  const snap=await getDoc(ref);
+  const caminho="entregadores/"+user.uid;
+  const referencia=ref(db,caminho);
 
-  if(!snap.exists()){
-   await setDoc(ref,{
-    nome:user.email,email:user.email,online:false,
-    atualizadoEm:serverTimestamp()
-   });
-  }
+  try{
+   const snap=await get(referencia);
 
-  pararEscuta=onSnapshot(ref,(docSnap)=>{
-   if(docSnap.exists()){
-    const dados=docSnap.data();
-    document.getElementById("nomeUsuario").innerText=
-      "Olá, "+(dados.nome||user.email);
-    const online=dados.online===true;
-    document.getElementById("status").innerText=
-      online?"🟢 ONLINE":"🔴 OFFLINE";
+   if(!snap.exists()){
+    await set(referencia,{
+     nome:user.email,
+     email:user.email,
+     online:false,
+     atualizadoEm:Date.now()
+    });
    }
-  },(erro)=>{
-   alert("Erro ao carregar status: "+erro.message);
-  });
+
+   pararEscuta=onValue(referencia,(snapshot)=>{
+    if(snapshot.exists()){
+     const dados=snapshot.val();
+
+     document.getElementById("nomeUsuario").innerText=
+      "Olá, "+(dados.nome||user.email);
+
+     const online=dados.online===true;
+
+     document.getElementById("status").innerText=
+      online?"🟢 ONLINE":"🔴 OFFLINE";
+    }
+   },(erro)=>{
+    alert("Erro ao carregar status: "+erro.message);
+   });
+
+  }catch(e){
+   alert("Erro no banco de dados: "+e.message);
+  }
 
  }else{
   usuarioAtual=null;
@@ -170,17 +196,20 @@ onAuthStateChanged(auth,async(user)=>{
 
 window.mudarStatus=async(online)=>{
  if(!usuarioAtual)return;
+
  try{
-  await updateDoc(doc(db,"entregadores",usuarioAtual.uid),{
+  await update(ref(db,"entregadores/"+usuarioAtual.uid),{
    online:online,
-   atualizadoEm:serverTimestamp()
+   atualizadoEm:Date.now()
   });
- }catch(e){alert("Não foi possível salvar o status: "+e.message);}
+ }catch(e){
+  alert("Não foi possível salvar o status: "+e.message);
+ }
 };
 
 window.sair=async()=>{
  if(usuarioAtual){
-  try{await window.mudarStatus(false);}catch(e){}
+  await window.mudarStatus(false);
  }
  await signOut(auth);
 };
@@ -195,7 +224,10 @@ window.adicionarEntrega=()=>{
  const distancia=document.getElementById("distancia").value;
  const valor=document.getElementById("valor").value;
 
- if(!cliente||!destino){alert("Preencha o destinatário e o destino.");return;}
+ if(!cliente||!destino){
+  alert("Preencha o destinatário e o destino.");
+  return;
+ }
 
  entregas.push({cliente,telefone,origem,destino,referencia,veiculo,distancia,valor});
  mostrarEntregas();
