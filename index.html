@@ -6,19 +6,20 @@
 <title>Parceiro Entregador</title>
 <style>
 *{box-sizing:border-box}
-body{margin:0;padding:18px;background:#111;color:white;font-family:Arial}
+body{margin:0;padding:18px;background:#111;color:white;font-family:Arial,sans-serif}
 header,.card{padding:20px;border-radius:14px;margin-bottom:16px}
 header{background:#ffcc00;color:#111}
 .card{background:#222}
 h2{color:#ffcc00}
 input,select,button{width:100%;padding:13px;margin:7px 0;border:0;border-radius:8px;font-size:16px}
-button{background:#ffcc00;color:#111;font-weight:bold}
+button{background:#ffcc00;color:#111;font-weight:bold;cursor:pointer}
 .online{background:#138a36;color:white}
 .offline{background:#b3261e;color:white}
 .status{font-size:22px;font-weight:bold;text-align:center;padding:12px}
-.entrega{background:#333;padding:12px;border-radius:8px;margin:8px 0}
+.entrega{background:#333;padding:12px;border-radius:8px;margin:8px 0;overflow-wrap:anywhere}
 .hidden{display:none}
 small{color:#ccc}
+#mensagem{overflow-wrap:anywhere}
 </style>
 </head>
 <body>
@@ -30,9 +31,9 @@ small{color:#ccc}
 
 <section class="card" id="login">
 <h2>Entrar na sua conta</h2>
-<input id="nome" placeholder="Seu nome">
-<input id="email" type="email" placeholder="Seu e-mail">
-<input id="senha" type="password" placeholder="Sua senha">
+<input id="nome" placeholder="Seu nome" autocomplete="name">
+<input id="email" type="email" placeholder="Seu e-mail" autocomplete="email">
+<input id="senha" type="password" placeholder="Sua senha" autocomplete="current-password">
 <button onclick="cadastrar()">Criar minha conta</button>
 <button onclick="entrar()">Entrar</button>
 <p id="mensagem"></p>
@@ -42,7 +43,7 @@ small{color:#ccc}
 <div class="card">
 <h2>Meu status</h2>
 <p id="nomeUsuario"></p>
-<div class="status" id="status">OFFLINE</div>
+<div class="status" id="status">🔴 OFFLINE</div>
 <button class="online" onclick="mudarStatus(true)">FICAR ONLINE</button>
 <button class="offline" onclick="mudarStatus(false)">FICAR OFFLINE</button>
 <small>Seu status fica salvo na sua conta.</small>
@@ -60,8 +61,8 @@ small{color:#ccc}
 <option value="Moto">Moto</option>
 <option value="Bicicleta">Bicicleta</option>
 </select>
-<input id="distancia" type="number" placeholder="Distância em km">
-<input id="valor" type="number" placeholder="Valor da entrega em R$">
+<input id="distancia" type="number" min="0" step="0.1" placeholder="Distância em km">
+<input id="valor" type="number" min="0" step="0.01" placeholder="Valor da entrega em R$">
 <button onclick="adicionarEntrega()">Adicionar entrega</button>
 </div>
 
@@ -72,182 +73,195 @@ small{color:#ccc}
 </section>
 
 <script type="module">
-import {initializeApp} from
-"https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
-
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 import {
- getAuth,createUserWithEmailAndPassword,
- signInWithEmailAndPassword,onAuthStateChanged,signOut
+  getAuth, createUserWithEmailAndPassword,
+  signInWithEmailAndPassword, onAuthStateChanged, signOut
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
-
 import {
- getDatabase,ref,set,get,update,onValue
+  getDatabase, ref, set, get, update, onValue
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js";
 
 const firebaseConfig = {
- apiKey: "AIzaSyAJhAyQeOWdcWKJqPwI2aEate6QYCgIqW0",
- authDomain: "parceiro-entregador-bbd2.firebaseapp.com",
- projectId: "parceiro-entregador-bbd2",
- databaseURL: "https://parceiro-entregador-bbd2a-default-rtdb.firebaseio.com",
- appId: "1:1042700499445:web:6946501fec49f892a688bc"
+  apiKey: "AIzaSyAJhAyQeOWdcWKJqPwI2aEate6QYCgIqW0",
+  authDomain: "parceiro-entregador-bbd2.firebaseapp.com",
+  projectId: "parceiro-entregador-bbd2",
+  databaseURL: "https://parceiro-entregador-bbd2a-default-rtdb.firebaseio.com",
+  appId: "1:1042700499445:web:6946501fec49f892a688bc"
 };
 
-const app=initializeApp(firebaseConfig);
-const auth=getAuth(app);
-const db=getDatabase(app);
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getDatabase(app);
 
-let usuarioAtual=null;
-let pararEscuta=null;
-let entregas=[];
+const ADMIN_UID = "Un7Tuu1oK8fZpgmp5Ts7VEDiXYt2";
+const CAMINHO_ENTREGADORES = "Entregadores";
 
-window.cadastrar=async()=>{
- const nome=document.getElementById("nome").value.trim();
- const email=document.getElementById("email").value.trim();
- const senha=document.getElementById("senha").value;
- const msg=document.getElementById("mensagem");
+let usuarioAtual = null;
+let pararEscuta = null;
+let entregas = [];
 
- if(!nome||!email||!senha){
-  msg.innerText="Preencha nome, e-mail e senha.";
-  return;
- }
+const el = (id) => document.getElementById(id);
+const mostrarMensagem = (texto) => { el("mensagem").innerText = texto; };
 
- try{
-  const cred=await createUserWithEmailAndPassword(auth,email,senha);
-
-  await set(ref(db,"entregadores/"+cred.user.uid),{
-   nome:nome,
-   email:email,
-   online:false,
-   atualizadoEm:Date.now()
-  });
-
-  msg.innerText="Conta criada!";
- }catch(e){
-  msg.innerText="Erro: "+e.message;
- }
-};
-
-window.entrar=async()=>{
- const email=document.getElementById("email").value.trim();
- const senha=document.getElementById("senha").value;
-
- try{
-  await signInWithEmailAndPassword(auth,email,senha);
- }catch(e){
-  document.getElementById("mensagem").innerText="Erro: "+e.message;
- }
-};
-
-onAuthStateChanged(auth,async(user)=>{
- const login=document.getElementById("login");
- const painel=document.getElementById("painel");
-
- if(pararEscuta){
-  pararEscuta();
-  pararEscuta=null;
- }
-
- if(user){
-  usuarioAtual=user;
-  login.classList.add("hidden");
-  painel.classList.remove("hidden");
-
-  const caminho="entregadores/"+user.uid;
-  const referencia=ref(db,caminho);
-
-  try{
-   const snap=await get(referencia);
-
-   if(!snap.exists()){
-    await set(referencia,{
-     nome:user.email,
-     email:user.email,
-     online:false,
-     atualizadoEm:Date.now()
-    });
-   }
-
-   pararEscuta=onValue(referencia,(snapshot)=>{
-    if(snapshot.exists()){
-     const dados=snapshot.val();
-
-     document.getElementById("nomeUsuario").innerText=
-      "Olá, "+(dados.nome||user.email);
-
-     const online=dados.online===true;
-
-     document.getElementById("status").innerText=
-      online?"🟢 ONLINE":"🔴 OFFLINE";
-    }
-   },(erro)=>{
-    alert("Erro ao carregar status: "+erro.message);
-   });
-
-  }catch(e){
-   alert("Erro no banco de dados: "+e.message);
+window.cadastrar = async () => {
+  const nome = el("nome").value.trim();
+  const email = el("email").value.trim();
+  const senha = el("senha").value;
+  if (!nome || !email || !senha) {
+    mostrarMensagem("Preencha nome, e-mail e senha.");
+    return;
+  }
+  if (senha.length < 6) {
+    mostrarMensagem("A senha precisa ter pelo menos 6 caracteres.");
+    return;
   }
 
- }else{
-  usuarioAtual=null;
-  login.classList.remove("hidden");
-  painel.classList.add("hidden");
- }
+  try {
+    const cred = await createUserWithEmailAndPassword(auth, email, senha);
+    await set(ref(db, `${CAMINHO_ENTREGADORES}/${cred.user.uid}`), {
+      Nome: nome,
+      Email: email,
+      Papel: "entregador",
+      Online: false,
+      Status: "offline",
+      CriadoEm: Date.now(),
+      UltimaAtividade: Date.now()
+    });
+    mostrarMensagem("Conta criada com sucesso!");
+  } catch (e) {
+    mostrarMensagem("Erro ao criar conta: " + e.message);
+  }
+};
+
+window.entrar = async () => {
+  const email = el("email").value.trim();
+  const senha = el("senha").value;
+  if (!email || !senha) {
+    mostrarMensagem("Digite seu e-mail e sua senha.");
+    return;
+  }
+  try {
+    await signInWithEmailAndPassword(auth, email, senha);
+  } catch (e) {
+    mostrarMensagem("Erro ao entrar: " + e.message);
+  }
+};
+
+onAuthStateChanged(auth, async (user) => {
+  if (pararEscuta) {
+    pararEscuta();
+    pararEscuta = null;
+  }
+
+  if (!user) {
+    usuarioAtual = null;
+    entregas = [];
+    el("login").classList.remove("hidden");
+    el("painel").classList.add("hidden");
+    return;
+  }
+
+  usuarioAtual = user;
+  el("login").classList.add("hidden");
+  el("painel").classList.remove("hidden");
+
+  const referenciaUsuario = ref(db, `${CAMINHO_ENTREGADORES}/${user.uid}`);
+
+  try {
+    const snapshot = await get(referenciaUsuario);
+    if (!snapshot.exists()) {
+      await set(referenciaUsuario, {
+        Nome: user.email || "Entregador",
+        Email: user.email || "",
+        Papel: user.uid === ADMIN_UID ? "admin" : "entregador",
+        Online: false,
+        Status: "offline",
+        CriadoEm: Date.now(),
+        UltimaAtividade: Date.now()
+      });
+    }
+
+    pararEscuta = onValue(referenciaUsuario, (snap) => {
+      if (!snap.exists()) return;
+      const dados = snap.val();
+      el("nomeUsuario").innerText = "Olá, " + (dados.Nome || user.email || "Entregador");
+      const online = dados.Online === true;
+      el("status").innerText = online ? "🟢 ONLINE" : "🔴 OFFLINE";
+    }, (erro) => {
+      alert("Erro ao carregar status: " + erro.message);
+    });
+  } catch (e) {
+    alert("Erro no banco de dados: " + e.message);
+  }
 });
 
-window.mudarStatus=async(online)=>{
- if(!usuarioAtual)return;
+window.mudarStatus = async (online) => {
+  if (!usuarioAtual) return;
+  try {
+    await update(ref(db, `${CAMINHO_ENTREGADORES}/${usuarioAtual.uid}`), {
+      Online: online,
+      Status: online ? "online" : "offline",
+      UltimaAtividade: Date.now()
+    });
+  } catch (e) {
+    alert("Não foi possível salvar o status: " + e.message);
+  }
+};
 
- try{
-  await update(ref(db,"entregadores/"+usuarioAtual.uid),{
-   online:online,
-   atualizadoEm:Date.now()
+window.sair = async () => {
+  if (usuarioAtual) await window.mudarStatus(false);
+  await signOut(auth);
+};
+
+window.adicionarEntrega = () => {
+  const cliente = el("cliente").value.trim();
+  const telefone = el("telefone").value.trim();
+  const origem = el("origem").value.trim();
+  const destino = el("destino").value.trim();
+  const referencia = el("referencia").value.trim();
+  const veiculo = el("veiculo").value;
+  const distancia = el("distancia").value;
+  const valor = el("valor").value;
+
+  if (!cliente || !destino) {
+    alert("Preencha o destinatário e o destino.");
+    return;
+  }
+
+  entregas.push({ cliente, telefone, origem, destino, referencia, veiculo, distancia, valor });
+  mostrarEntregas();
+  ["cliente","telefone","origem","destino","referencia","distancia","valor"]
+    .forEach(id => el(id).value = "");
+};
+
+function mostrarEntregas() {
+  el("lista").innerHTML = "";
+  entregas.forEach((e, i) => {
+    const item = document.createElement("div");
+    item.className = "entrega";
+    const linhas = [
+      `Entrega ${i + 1} — ${e.cliente}`,
+      `Telefone: ${e.telefone || "-"}`,
+      `Retirada: ${e.origem || "-"}`,
+      `Destino: ${e.destino}`,
+      `Referência: ${e.referencia || "-"}`,
+      `Veículo: ${e.veiculo}`,
+      `Distância: ${e.distancia || "0"} km`,
+      `Valor: R$ ${e.valor || "0"}`
+    ];
+    linhas.forEach((linha, indice) => {
+      if (indice === 0) {
+        const forte = document.createElement("b");
+        forte.textContent = linha;
+        item.appendChild(forte);
+      } else {
+        item.appendChild(document.createElement("br"));
+        item.appendChild(document.createTextNode(linha));
+      }
+    });
+    el("lista").appendChild(item);
   });
- }catch(e){
-  alert("Não foi possível salvar o status: "+e.message);
- }
-};
-
-window.sair=async()=>{
- if(usuarioAtual){
-  await window.mudarStatus(false);
- }
- await signOut(auth);
-};
-
-window.adicionarEntrega=()=>{
- const cliente=document.getElementById("cliente").value;
- const telefone=document.getElementById("telefone").value;
- const origem=document.getElementById("origem").value;
- const destino=document.getElementById("destino").value;
- const referencia=document.getElementById("referencia").value;
- const veiculo=document.getElementById("veiculo").value;
- const distancia=document.getElementById("distancia").value;
- const valor=document.getElementById("valor").value;
-
- if(!cliente||!destino){
-  alert("Preencha o destinatário e o destino.");
-  return;
- }
-
- entregas.push({cliente,telefone,origem,destino,referencia,veiculo,distancia,valor});
- mostrarEntregas();
-
- ["cliente","telefone","origem","destino","referencia","distancia","valor"]
- .forEach(id=>document.getElementById(id).value="");
-};
-
-function mostrarEntregas(){
- document.getElementById("lista").innerHTML=entregas.map((e,i)=>`
- <div class="entrega">
- <b>Entrega ${i+1} — ${e.cliente}</b><br>
- Telefone: ${e.telefone}<br>
- Retirada: ${e.origem}<br>
- Destino: ${e.destino}<br>
- Referência: ${e.referencia}<br>
- Veículo: ${e.veiculo}<br>
- Distância: ${e.distancia} km<br>
- Valor: R$ ${e.valor}
- </div>`).join("");
 }
 </script>
 </body>
