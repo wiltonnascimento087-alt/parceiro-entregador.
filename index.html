@@ -157,8 +157,8 @@ onAuthStateChanged(auth, async (user) => {
   if (pararEscuta) {
     pararEscuta();
     pararEscuta = null;
-  }
-
+  }online = profile.online === true;if (user.uid === ADMIN_UID) profile.role = 'admin';
+online = profile.online === true;
   if (!user) {
     usuarioAtual = null;
     entregas = [];
