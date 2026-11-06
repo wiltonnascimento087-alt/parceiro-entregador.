@@ -82,13 +82,18 @@ import {
   getDatabase, ref, set, get, update, onValue
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js";
 
+
 const firebaseConfig = {
   apiKey: "AIzaSyAJhAyQeOWdcWKJqPwI2aEate6QYCgIqW0",
-  authDomain: "parceiro-entregador-bbd2.firebaseapp.com",
-  projectId: "parceiro-entregador-bbd2",
+  authDomain: "partner-delivery-bbd2a.firebaseapp.com",
+  projectId: "parceiro-entregador-bbd2a",
   databaseURL: "https://parceiro-entregador-bbd2a-default-rtdb.firebaseio.com",
-  appId: "1:1042700499445:web:6946501fec49f892a688bc"
+  storageBucket: "partner-delivery-bbd2a.firebasestorage.app",
+  messagingSenderId: "1042700499445",
+  appId: "1:1042700499445:web:6946501fec49f892a688bc",
+  measurementId: "G-PGLNRQZ3CJ"
 };
+
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
